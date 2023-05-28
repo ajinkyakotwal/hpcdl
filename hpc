@@ -1,0 +1,302 @@
+HPC 1- DFS and BFS
+--------------------------------------------------------------------------------------------------------------------------
+#include <iostream>
+#include <queue>
+#include <vector>
+#include <omp.h>
+
+// Function for parallel Breadth First Search
+void parallelBFS(std::vector<std::vector<int>>& graph, int startNode) {
+    int numNodes = graph.size();
+    std::vector<bool> visited(numNodes, false);
+
+    std::queue<int> bfsQueue;
+    bfsQueue.push(startNode);
+    visited[startNode] = true;
+
+    while (!bfsQueue.empty()) {
+        int currentNode = bfsQueue.front();
+        bfsQueue.pop();
+        std::cout << "Visited node: " << currentNode << std::endl;
+
+        #pragma omp parallel for
+        for (int i = 0; i < numNodes; ++i) {
+            if (graph[currentNode][i] && !visited[i]) {
+                visited[i] = true;
+                bfsQueue.push(i);
+            }
+        }
+    }
+}
+
+// Function for parallel Depth First Search
+void parallelDFS(std::vector<std::vector<int>>& graph, int currentNode, std::vector<bool>& visited) {
+    std::cout << "Visited node: " << currentNode << std::endl;
+    visited[currentNode] = true;
+
+    #pragma omp parallel for
+    for (int i = 0; i < graph[currentNode].size(); ++i) {
+        int nextNode = graph[currentNode][i];
+        if (!visited[nextNode]) {
+            parallelDFS(graph, nextNode, visited);
+        }
+    }
+}
+
+int main() {
+    // Create an undirected graph
+    std::vector<std::vector<int>> graph = {
+        {1, 2},     // Node 0 is connected to nodes 1 and 2
+        {0, 3, 4},  // Node 1 is connected to nodes 0, 3, and 4
+        {0, 5},     // Node 2 is connected to nodes 0 and 5
+        {1},        // Node 3 is connected to node 1
+        {1},        // Node 4 is connected to node 1
+        {2}         // Node 5 is connected to node 2
+    };
+
+    // Perform parallel BFS
+    std::cout << "Parallel BFS:" << std::endl;
+    parallelBFS(graph, 0);
+    std::cout << std::endl;
+
+    // Perform parallel DFS
+    std::cout << "Parallel DFS:" << std::endl;
+    std::vector<bool> visited(graph.size(), false);
+    parallelDFS(graph, 0, visited);
+
+    return 0;
+}
+//-----------------------------------------------------------------------------------------------------------------------
+HPC-2 bubble sort and merge sort
+
+#include <iostream>
+#include <vector>
+#include <omp.h>
+using namespace std;
+// Parallel Bubble Sort
+void parallel_bubble_sort(vector<int>& vec) {
+int n = vec.size();
+bool swapped = true;
+#pragma omp parallel default(none) shared(vec, n, swapped)
+{
+while (swapped) {
+swapped = false;
+#pragma omp for
+for (int i = 0; i < n-1; i++) {
+if (vec[i] > vec[i+1]) {
+swap(vec[i], vec[i+1]);
+swapped = true;
+}
+}
+}
+}
+}
+// Parallel Merge Sort
+void parallel_merge_sort(vector<int>& vec, int left, int right) {
+if (left < right) {
+int mid = (left + right) / 2;
+#pragma omp parallel sections
+{
+#pragma omp section
+{
+parallel_merge_sort(vec, left, mid);
+}
+#pragma omp section
+{
+parallel_merge_sort(vec, mid+1, right);
+}
+}
+vector<int> temp(right-left+1);
+int i = left, j = mid+1, k = 0;
+while (i <= mid && j <= right) {
+if (vec[i] < vec[j]) {
+temp[k++] = vec[i++];
+} else {
+temp[k++] = vec[j++];
+}
+}
+while (i <= mid) {
+temp[k++] = vec[i++];
+}
+while (j <= right) {
+temp[k++] = vec[j++];
+}
+for (i = left, k = 0; i <= right; i++, k++) {
+vec[i] = temp[k];
+}
+}
+}
+int main() {
+vector<int> vec = {9, 5, 7, 2, 8, 4, 1, 3, 6};
+int n = vec.size();
+// Parallel Bubble Sort
+vector<int> par_vec_bubble = vec;
+double par_bubble_start_time = omp_get_wtime();
+parallel_bubble_sort(par_vec_bubble);
+double par_bubble_end_time = omp_get_wtime();
+// Parallel Merge Sort
+vector<int> par_vec_merge = vec;
+double par_merge_start_time = omp_get_wtime();
+parallel_merge_sort(par_vec_merge, 0, n-1);
+double par_merge_end_time = omp_get_wtime();
+// Print results
+cout << "Parallel Bubble Sort: ";
+for (auto x : par_vec_bubble) {
+cout << x << " ";
+}
+cout << "Time taken: " << (par_bubble_end_time - par_bubble_start_time) << " seconds\n";
+cout << "Parallel Merge Sort: ";
+for (auto x : par_vec_merge) {
+cout << x << " ";
+}
+cout << "Time taken: " << (par_merge_end_time - par_merge_start_time) << " seconds\n";
+return 0;
+}
+----------------------------------------------------------------------------------------------------------------------------------------------
+HPC 3- min max sum
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <numeric>
+#include <omp.h>
+using namespace std;
+int main() {
+vector<int> vec = {9, 5, 7, 2, 8, 4, 1, 3, 6};
+int n = vec.size();
+// Parallel Reduction
+int min_val = vec[0];
+int max_val = vec[0];
+int sum_val = 0;
+double avg_val = 0;
+#pragma omp parallel for reduction(min:min_val) reduction(max:max_val)
+reduction(+:sum_val)
+for (int i = 0; i < n; i++) {
+min_val = min(min_val, vec[i]);
+max_val = max(max_val, vec[i]);
+sum_val += vec[i];
+}
+avg_val = (double)sum_val / n;
+// Print results
+cout << "Min value: " << min_val << endl;
+cout << "Max value: " << max_val << endl;
+cout << "Sum value: " << sum_val << endl;
+cout << "Average value: " << avg_val << endl;
+return 0;
+}
+-----------------------------------------------------------------------------------------------------------------------------------
+HPC- 4 CUDA
+
+Addition
+#include <stdio.h>
+#include <cuda_runtime.h>
+__global__ void add(int *a, int *b, int *c, int n) {
+int i = threadIdx.x + blockDim.x * blockIdx.x;
+if (i < n) {
+c[i] = a[i] + b[i];
+}
+}
+int main() {
+int n = 1000000;
+int *a, *b, *c;
+int *d_a, *d_b, *d_c;
+int size = n * sizeof(int);
+// Allocate memory on host
+a = (int*)malloc(size);
+b = (int*)malloc(size);
+c = (int*)malloc(size);
+// Initialize input arrays
+for (int i = 0; i < n; i++) {
+a[i] = i;
+b[i] = n - i;
+}
+// Allocate memory on device
+cudaMalloc(&d_a, size);
+cudaMalloc(&d_b, size);
+cudaMalloc(&d_c, size);
+// Copy input data from host to device
+cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
+cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
+// Launch kernel
+int threadsPerBlock = 256;
+int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
+add<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, n);
+// Copy output data from device to host
+cudaMemcpy(c, d_c, size, cudaMemcpyDeviceToHost);
+// Verify results
+for (int i = 0; i < n; i++) {
+if (c[i] != n) {
+printf("Error: c[%d] = %d\n", i, c[i]);
+break;
+}
+}
+// Free memory
+free(a);
+free(b);
+free(c);
+cudaFree(d_a);
+cudaFree(d_b);
+cudaFree(d_c);
+return 0;
+}
+MAtrix Multiplication
+#include <stdio.h>
+#include <stdlib.h>
+#include <cuda_runtime.h>
+#define N 1024
+__global__ void matrixMul(int *a, int *b, int *c, int n) {
+int row = blockIdx.y * blockDim.y + threadIdx.y;
+int col = blockIdx.x * blockDim.x + threadIdx.x;
+if (row < n && col < n) {
+int sum = 0;
+for (int i = 0; i < n; i++) {
+sum += a[row * n + i] * b[i * n + col];
+}
+c[row * n + col] = sum;
+}
+}
+int main() {
+int *h_a, *h_b, *h_c;
+int *d_a, *d_b, *d_c;
+int size = N * N * sizeof(int);
+// Allocate memory on host
+h_a = (int*)malloc(size);
+h_b = (int*)malloc(size);
+h_c = (int*)malloc(size);
+// Initialize input arrays
+for (int i = 0; i < N * N; i++) {
+h_a[i] = rand() % 10;
+h_b[i] = rand() % 10;
+}
+// Allocate memory on device
+cudaMalloc(&d_a, size);
+cudaMalloc(&d_b, size);
+cudaMalloc(&d_c, size);
+// Copy input data from host to device
+cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
+cudaMemcpy(d_b, h_b, size, cudaMemcpyHostToDevice);
+// Launch kernel
+dim3 threadsPerBlock(16, 16);
+dim3 blocksPerGrid((N + threadsPerBlock.x - 1) / threadsPerBlock.x, (N + threadsPerBlock.y
+- 1) / threadsPerBlock.y);
+matrixMul<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, N);
+// Copy output data from device to host
+cudaMemcpy(h_c, d_c, size, cudaMemcpyDeviceToHost);
+// Verify results
+for (int i = 0; i < N * N; i++) {
+if (h_c[i] != (h_a[i/N*N+i%N] * h_b[i%N*N+i/N])) {
+printf("Error: h_c[%d] = %d\n", i, h_c[i]);
+break;
+}
+}
+// Free memory
+free(h_a);
+free(h_b);
+free(h_c);
+cudaFree(d_a);
+cudaFree(d_b);
+cudaFree(d_c);
+
+return 0;
+}
+
